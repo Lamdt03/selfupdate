@@ -12,7 +12,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/fynelabs/selfupdate/internal/binarydist"
+	"github.com/Lamdt03/selfupdate/internal/binarydist"
 )
 
 var (

@@ -17,7 +17,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/fynelabs/selfupdate/internal/build"
+	"github.com/Lamdt03/selfupdate/internal/build"
 )
 
 const (

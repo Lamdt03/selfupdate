@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/fynelabs/selfupdate/cmd/selfupdatectl/internal/cloud"
+	"github.com/Lamdt03/selfupdate/cmd/selfupdatectl/internal/cloud"
 	"github.com/urfave/cli/v2"
 )
 

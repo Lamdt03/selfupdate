@@ -87,15 +87,6 @@ func (u *Updater) CheckNow() error {
 		v = &Version{Date: mtime.In(time.UTC)}
 	}
 
-	latest, err := u.conf.Source.LatestVersion()
-	if err != nil {
-		return err
-	}
-	if !latest.Date.After(v.Date) {
-		logDebug("Local binary time (%v) is recent enough compared to the online version (%v).\n", v.Date.Format(time.RFC1123Z), latest.Date.Format(time.RFC1123Z))
-		return nil
-	}
-
 	if ask := u.conf.UpgradeConfirmCallback; ask != nil {
 		if !ask("New version found") {
 			logInfo("The user didn't confirm the upgrade.\n")
@@ -103,15 +94,16 @@ func (u *Updater) CheckNow() error {
 		}
 	}
 
+	r, contentLength, err := u.conf.Source.Get(v)
+	if err != nil {
+		return err
+	}
+
 	s, err := u.conf.Source.GetSignature()
 	if err != nil {
 		return err
 	}
 
-	r, contentLength, err := u.conf.Source.Get(v)
-	if err != nil {
-		return err
-	}
 	defer r.Close()
 
 	pr := &progressReader{Reader: r, progressCallback: u.conf.ProgressCallback, contentLength: contentLength}

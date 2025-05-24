@@ -2,8 +2,10 @@ package selfupdate
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Masterminds/semver"
 	"io"
 	"net/http"
 	"os"
@@ -29,7 +31,13 @@ type platform struct {
 	Executable string
 }
 
-// NewHTTPSource provide a selfupdate.Source that will fetch the specified base URL
+type appVersion struct {
+	Name        string `json:"name"`
+	OS          string `json:"os"`
+	DownloadURL string `json:"download_url"`
+	Version     string `json:"version"`
+}
+
 // for update and signature using the http.Client provided. To help into providing
 // cross platform application, the base is actually a Go Template string where the
 // following parameter are recognized:
@@ -44,29 +52,70 @@ func NewHTTPSource(client *http.Client, base string) Source {
 		client = http.DefaultClient
 	}
 
-	base = replaceURLTemplate(base)
-
 	return &HTTPSource{client: client, baseURL: base}
 }
 
 // Get will return if it succeed an io.ReaderCloser to the new executable being downloaded and its length
 func (h *HTTPSource) Get(v *Version) (io.ReadCloser, int64, error) {
-	request, err := http.NewRequest("GET", h.baseURL, nil)
+	var request *http.Request
+	var err error
+	var response *http.Response
+	request, err = http.NewRequest("GET", h.baseURL, nil)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	if v != nil && !v.Date.IsZero() {
-		request.Header.Add("If-Modified-Since", v.Date.Format(http.TimeFormat))
-
-	}
-
-	response, err := h.client.Do(request)
+	response, err = h.client.Do(request)
 	if err != nil {
 		return nil, 0, err
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error reading response body: %s", err)
+	}
+	defer response.Body.Close()
+	var appVersions []appVersion
+	err = json.Unmarshal(body, &appVersions)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error unmarshalling response body: %s", err)
+	}
+	for _, a := range appVersions {
+		if a.OS == runtime.GOOS {
+			isUpdate, err := compare(v.Number, a.Version)
+			if err != nil {
+				return nil, 0, fmt.Errorf("error comparing versions: %s", err)
+			}
+			if !isUpdate {
+				return nil, 0, fmt.Errorf("error comparing versions: %s and %s", a.Version, a.OS)
+			} else {
+				h.baseURL = a.DownloadURL
+				request, err = http.NewRequest("GET", h.baseURL, nil)
+				if err != nil {
+					return nil, 0, fmt.Errorf("error creating request: %s", err)
+				}
+				response, err = h.client.Do(request)
+				if err != nil {
+					return nil, 0, fmt.Errorf("error downloading %s: %s", h.baseURL, err)
+				} else {
+					break
+				}
+			}
+		}
 	}
 
 	return response.Body, response.ContentLength, nil
+}
+
+func compare(curVersion, newVersion string) (bool, error) {
+	curSemVer, err := semver.NewVersion(curVersion)
+	if err != nil {
+		return false, fmt.Errorf("Error parsing current version %s: %s", curVersion, err)
+	}
+	newSemVer, err := semver.NewVersion(newVersion)
+	if err != nil {
+		return false, fmt.Errorf("Error parsing new version %s: %s", newVersion, err)
+	}
+	return curSemVer.LessThan(newSemVer), nil
 }
 
 // GetSignature will return the content of  ${URL}.ed25519

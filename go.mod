@@ -1,8 +1,9 @@
-module github.com/fynelabs/selfupdate
+module github.com/Lamdt03/selfupdate
 
 go 1.19
 
 require (
+	github.com/Masterminds/semver v1.5.0
 	github.com/aws/aws-sdk-go v1.44.28
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli/v2 v2.8.1

@@ -3,7 +3,7 @@ package selfupdate
 import (
 	"io"
 
-	"github.com/fynelabs/selfupdate/internal/binarydist"
+	"github.com/Lamdt03/selfupdate/internal/binarydist"
 )
 
 // Patcher defines an interface for applying binary patches to an old item to get an updated item.
