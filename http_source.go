@@ -3,7 +3,6 @@ package selfupdate
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/Masterminds/semver"
 	"io"
@@ -60,49 +59,15 @@ func (h *HTTPSource) Get(v *Version) (io.ReadCloser, int64, error) {
 	var request *http.Request
 	var err error
 	var response *http.Response
+
 	request, err = http.NewRequest("GET", h.baseURL, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("error creating request: %s", err)
 	}
-
 	response, err = h.client.Do(request)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("error downloading %s: %s", h.baseURL, err)
 	}
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, 0, fmt.Errorf("error reading response body: %s", err)
-	}
-	defer response.Body.Close()
-	var appVersions []appVersion
-	err = json.Unmarshal(body, &appVersions)
-	if err != nil {
-		return nil, 0, fmt.Errorf("error unmarshalling response body: %s", err)
-	}
-	for _, a := range appVersions {
-		if a.OS == runtime.GOOS {
-			isUpdate, err := compare(v.Number, a.Version)
-			if err != nil {
-				return nil, 0, fmt.Errorf("error comparing versions: %s", err)
-			}
-			if !isUpdate {
-				return nil, 0, fmt.Errorf("error comparing versions: %s and %s", a.Version, a.OS)
-			} else {
-				h.baseURL = a.DownloadURL
-				request, err = http.NewRequest("GET", h.baseURL, nil)
-				if err != nil {
-					return nil, 0, fmt.Errorf("error creating request: %s", err)
-				}
-				response, err = h.client.Do(request)
-				if err != nil {
-					return nil, 0, fmt.Errorf("error downloading %s: %s", h.baseURL, err)
-				} else {
-					break
-				}
-			}
-		}
-	}
-
 	return response.Body, response.ContentLength, nil
 }
 
@@ -148,22 +113,33 @@ func (h *HTTPSource) GetSignature() ([64]byte, error) {
 
 // LatestVersion will return the URL Last-Modified time
 func (h *HTTPSource) LatestVersion() (*Version, error) {
-	resp, err := h.client.Head(h.baseURL)
+	request, err := http.NewRequest("GET", h.baseURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating request: %s", err)
 	}
 
-	lastModified := resp.Header.Get("Last-Modified")
-	if lastModified == "" {
-		return nil, errors.New("no Last-Modified served")
-	}
-
-	t, err := http.ParseTime(lastModified)
+	response, err := h.client.Do(request)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error send request %s: %s", h.baseURL, err)
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response body: %s", err)
+	}
+	defer response.Body.Close()
+	var appVersions []appVersion
+	err = json.Unmarshal(body, &appVersions)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling response body: %s", err)
 	}
 
-	return &Version{Date: t}, nil
+	for _, a := range appVersions {
+		if a.OS == runtime.GOOS {
+			h.baseURL = a.DownloadURL
+			return &Version{Number: a.Version}, nil
+		}
+	}
+	return nil, fmt.Errorf("no version found")
 }
 
 func replaceURLTemplate(base string) string {

@@ -3,6 +3,7 @@ package selfupdate
 import (
 	"crypto/ed25519"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -78,20 +79,25 @@ func (u *Updater) CheckNow() error {
 	defer u.lock.Unlock()
 
 	v := u.conf.Current
-	if v == nil {
-		mtime, err := lastModifiedExecutable()
-		if err != nil {
-			return err
-		}
 
-		v = &Version{Date: mtime.In(time.UTC)}
+	newVer, err := u.conf.Source.LatestVersion()
+	if err != nil {
+		return fmt.Errorf("get latest version: %w", err)
 	}
 
-	if ask := u.conf.UpgradeConfirmCallback; ask != nil {
-		if !ask("New version found") {
-			logInfo("The user didn't confirm the upgrade.\n")
-			return nil
+	isUpdate, err := compare(v.Number, newVer.Number)
+	if err != nil {
+		return fmt.Errorf("compare version: %w", err)
+	}
+	if isUpdate {
+		if ask := u.conf.UpgradeConfirmCallback; ask != nil {
+			if !ask("New version found") {
+				logInfo("The user didn't confirm the upgrade.\n")
+				return nil
+			}
 		}
+	} else {
+		return nil
 	}
 
 	r, contentLength, err := u.conf.Source.Get(v)
