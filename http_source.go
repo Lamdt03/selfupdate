@@ -72,6 +72,8 @@ func (h *HTTPSource) Get(v *Version) (io.ReadCloser, int64, error) {
 }
 
 func compare(curVersion, newVersion string) (bool, error) {
+	curVersion = strings.TrimSpace(curVersion)
+	newVersion = strings.TrimSpace(newVersion)
 	curSemVer, err := semver.NewVersion(curVersion)
 	if err != nil {
 		return false, fmt.Errorf("Error parsing current version %s: %s", curVersion, err)
